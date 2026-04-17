@@ -1,0 +1,21 @@
+# Build outputs
+bin/
+obj/
+*.user
+
+# .NET
+.vs/
+*.suo
+*.userprefs
+
+# NuGet
+*.nupkg
+.nuget/
+
+# 개인 참고용 문서 — git 제외
+docs/private/
+
+# 환경 설정
+.env
+appsettings.*.json
+!appsettings.json
