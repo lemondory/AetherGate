@@ -36,6 +36,7 @@ public sealed class MonsterActor : ReceiveActor
     private int _patrolIndex = 0;
     private Position[] _patrolPath;
     private readonly Random _rng = new();
+    private ICancelable? _detectTimer;
 
     // 마지막 공격 시각
     private DateTime _lastAttackTime = DateTime.MinValue;
@@ -114,8 +115,9 @@ public sealed class MonsterActor : ReceiveActor
         _zoneActor.Tell(new MonsterStateChanged(MonsterId, Domain.Enums.MonsterState.Detect));
         Become(Detect);
 
-        // 0.5초 후 Chase 진입
-        Context.System.Scheduler.ScheduleTellOnce(
+        // 0.5초 후 Chase 진입 (ICancelable로 관리 — PostStop에서 취소)
+        _detectTimer?.Cancel();
+        _detectTimer = Context.System.Scheduler.ScheduleTellOnceCancelable(
             TimeSpan.FromMilliseconds(500), Self, new BeginChase(), Self);
     }
 
@@ -296,6 +298,11 @@ public sealed class MonsterActor : ReceiveActor
             // 피격 시 공격자를 타겟으로 설정 (귀환/순찰 중 피격)
             BecomeChase();
         }
+    }
+
+    protected override void PostStop()
+    {
+        _detectTimer?.Cancel();
     }
 
     // ─── 몬스터 전용 내부 메시지 ──────────────────────────────────────

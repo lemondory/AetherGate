@@ -66,7 +66,7 @@ public sealed class WorldActor : ReceiveActor
     private void HandleEnterDungeon(EnterDungeonRequest req)
     {
         var sessionActor = Sender;
-        string instanceId = $"dungeon_{req.DungeonTemplateId}_{Guid.NewGuid():N[..8]}";
+        string instanceId = $"dungeon_{req.DungeonTemplateId}_{Guid.NewGuid().ToString("N")[..8]}";
 
         var dungeonCfg = new ZoneConfig(instanceId, req.DungeonTemplateId, true);
         var dungeon = Context.ActorOf(
@@ -106,7 +106,7 @@ public sealed class WorldActor : ReceiveActor
     {
         var path = msg.ActorRef.Path.Name;
         _log.Warning("[World] Zone actor terminated: {0}", path);
-        _dungeonInstances.Remove(path.Replace("zone-", ""));
+        _dungeonInstances.Remove(path.StartsWith("zone-") ? path["zone-".Length..] : path);
     }
 
     private IActorRef? FindZone(string zoneId)

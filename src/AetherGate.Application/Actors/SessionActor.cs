@@ -118,6 +118,12 @@ public sealed class SessionActor : ReceiveActor
                 _log.Warning("[Session:{0}] Receive error: {1}", _sessionId, msg.Reason);
                 HandleDisconnect();
             });
+            Receive<SendFailed>(msg =>
+            {
+                _log.Warning("[Session:{0}] Send failed: {1} — disconnecting", _sessionId, msg.Reason);
+                HandleDisconnect();
+            });
+            Receive<Done>(_ => { });
         });
     }
 
@@ -253,6 +259,12 @@ public sealed class SessionActor : ReceiveActor
                 _log.Warning("[Session:{0}] Receive error: {1}", _sessionId, msg.Reason);
                 HandleDisconnect();
             });
+            Receive<SendFailed>(msg =>
+            {
+                _log.Warning("[Session:{0}] Send failed: {1} — disconnecting", _sessionId, msg.Reason);
+                HandleDisconnect();
+            });
+            Receive<Done>(_ => { }); // 정상 전송 완료 — 무시
         });
     }
 

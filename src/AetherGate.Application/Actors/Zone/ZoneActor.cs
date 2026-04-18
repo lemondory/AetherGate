@@ -32,11 +32,15 @@ public sealed class ZoneActor : ReceiveActor
     // 네트워크 브로드캐스트 대상 (playerId → SessionActor)
     private readonly Dictionary<string, IActorRef> _sessions = new();
 
-    // 몬스터 감지 스캔용 플레이어 위치 캐시 (playerId → Position)
-    private readonly Dictionary<string, Position> _playerPositions = new();
+    // 위치 캐시 — 몬스터 감지 스캔 / AoE 범위 판별에 사용
+    private readonly Dictionary<string, Position> _playerPositions  = new();
+    private readonly Dictionary<string, Position> _monsterPositions = new();
 
-    private IActorRef _chatActor    = ActorRefs.Nobody;
+    private IActorRef _chatActor     = ActorRefs.Nobody;
     private IActorRef _tickScheduler = ActorRefs.Nobody;
+
+    // 리스폰 타이머 — PostStop에서 일괄 취소
+    private readonly List<ICancelable> _respawnTimers = new();
 
     public ZoneActor(ZoneConfig config)
     {
@@ -58,14 +62,21 @@ public sealed class ZoneActor : ReceiveActor
         // ─── 게임 이벤트 → 클라이언트 브로드캐스트 ──────────────────
         Receive<PlayerMoved>(evt =>
         {
-            _playerPositions[evt.PlayerId] = evt.To;  // 위치 캐시 갱신
+            _playerPositions[evt.PlayerId] = evt.To;
             BroadcastToSessionsExcept(evt, evt.PlayerId);
         });
-        Receive<MonsterSpawned>(evt      => BroadcastToSessions(evt));
-        Receive<MonsterMoved>(evt        => BroadcastToSessions(evt));
+        Receive<MonsterSpawned>(evt => BroadcastToSessions(evt));
+        Receive<MonsterMoved>(evt =>
+        {
+            _monsterPositions[evt.MonsterId] = evt.Position; // 위치 캐시 갱신
+            BroadcastToSessions(evt);
+        });
         Receive<MonsterStateChanged>(evt => BroadcastToSessions(evt));
         Receive<MonsterDied>(evt         => HandleMonsterDied(evt));
-        Receive<CombatDamage>(evt        => BroadcastToSessions(evt));
+
+        // CombatDamage: 전체 세션에 브로드캐스트(시각 피드백) + 대상 Actor에 전달(HP 감소)
+        Receive<CombatDamage>(HandleCombatDamage);
+
         Receive<SkillUsed>(evt           => BroadcastToSessions(evt));
         Receive<BuffApplied>(evt         => BroadcastToSessions(evt));
         Receive<ItemDropped>(evt         => BroadcastToSessions(evt));
@@ -86,6 +97,10 @@ public sealed class ZoneActor : ReceiveActor
             BroadcastToSessions(new DungeonFailed(req.ZoneInstanceId));
             Context.Parent.Tell(req);
         });
+
+        // ─── AoE 스킬 범위 피해 처리 ──────────────────────────────────
+        // PlayerActor가 AreaAttack 시 ZoneActor에 위임 → 범위 내 몬스터에게 CombatDamage 전송
+        Receive<PlayerActor.AreaSkillRequest>(HandleAreaSkill);
 
         // ─── 몬스터 감지 스캔 요청 ────────────────────────────────────
         // MonsterActor가 Patrol/Return Tick마다 전송 → Zone이 플레이어 위치 계산 후 응답
@@ -141,7 +156,7 @@ public sealed class ZoneActor : ReceiveActor
             Props.Create(() => new PlayerActor(req.PlayerId, req.SpawnPosition, Self)),
             $"player-{req.PlayerId}");
         _players[req.PlayerId] = playerActor;
-        _playerPositions[req.PlayerId] = req.SpawnPosition;  // 초기 위치 등록
+        _playerPositions[req.PlayerId] = req.SpawnPosition;
 
         BroadcastToSessionsExcept(
             new PlayerEnteredZone(req.PlayerId, req.SpawnPosition), req.PlayerId);
@@ -172,17 +187,33 @@ public sealed class ZoneActor : ReceiveActor
     }
 
     // ─────────────────────────────────────────────────────────────────
+    // 전투 피해 — 세션 브로드캐스트 + 대상 Actor HP 감소
+    // ─────────────────────────────────────────────────────────────────
+    private void HandleCombatDamage(CombatDamage evt)
+    {
+        // 1. 전체 세션에 브로드캐스트 (데미지 숫자, 이펙트 표시)
+        BroadcastToSessions(evt);
+
+        // 2. 대상 Actor에 전달하여 실제 HP 감소 처리
+        if (_monsters.TryGetValue(evt.TargetId, out var monster))
+            monster.Tell(evt);
+        else if (_players.TryGetValue(evt.TargetId, out var player))
+            player.Tell(evt);
+    }
+
+    // ─────────────────────────────────────────────────────────────────
     // 몬스터 사망 처리
     // ─────────────────────────────────────────────────────────────────
     private void HandleMonsterDied(MonsterDied evt)
     {
+        _monsterPositions.Remove(evt.MonsterId);
         BroadcastToSessions(evt);
 
         if (!_config.IsInstance)
         {
-            // 필드맵: 30초 후 리스폰
-            Context.System.Scheduler.ScheduleTellOnce(
-                TimeSpan.FromSeconds(30), Self, new RespawnMonster(evt.MonsterId), Self);
+            // 필드맵: 30초 후 리스폰 (ICancelable로 관리 — PostStop에서 취소)
+            _respawnTimers.Add(Context.System.Scheduler.ScheduleTellOnceCancelable(
+                TimeSpan.FromSeconds(30), Self, new RespawnMonster(evt.MonsterId), Self));
         }
         else
         {
@@ -236,34 +267,22 @@ public sealed class ZoneActor : ReceiveActor
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // 라우팅 헬퍼
+    // AoE 스킬 — 캐시된 몬스터 위치로 범위 내 타겟 판별 후 CombatDamage 전송
     // ─────────────────────────────────────────────────────────────────
-    private void ForwardToPlayer(string playerId, object msg)
+    private void HandleAreaSkill(PlayerActor.AreaSkillRequest req)
     {
-        if (_players.TryGetValue(playerId, out var actor))
-            actor.Tell(msg);
-    }
+        var rng = new Random();
+        bool crit = rng.NextSingle() < 0.10f;
+        int baseDamage = req.Skill.Damage + (crit ? req.Skill.Damage / 2 : 0);
 
-    // 모든 SessionActor에게 전달
-    private void BroadcastToSessions(object msg)
-    {
-        foreach (var session in _sessions.Values)
-            session.Tell(msg);
-    }
-
-    // 특정 플레이어를 제외하고 전달
-    private void BroadcastToSessionsExcept(object msg, string excludePlayerId)
-    {
-        foreach (var (playerId, session) in _sessions)
-            if (playerId != excludePlayerId)
-                session.Tell(msg);
-    }
-
-    // 특정 플레이어 세션에만 전달
-    private void SendToSession(string playerId, object msg)
-    {
-        if (_sessions.TryGetValue(playerId, out var session))
-            session.Tell(msg);
+        foreach (var (monsterId, monsterPos) in _monsterPositions)
+        {
+            if (monsterPos.DistanceTo(req.Center) <= req.Skill.Range)
+            {
+                // HandleCombatDamage를 통해 세션 브로드캐스트 + MonsterActor HP 감소
+                Self.Tell(new CombatDamage(req.CasterId, monsterId, baseDamage, crit));
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -272,13 +291,7 @@ public sealed class ZoneActor : ReceiveActor
     private void HandleScanForPlayers(MonsterActor.ScanForPlayers req)
     {
         if (!_monsters.TryGetValue(req.MonsterId, out var monsterActor)) return;
-
-        // PlayerActor가 없으면 스캔 불필요
-        if (_players.Count == 0) return;
-
-        // 가장 가까운 플레이어 탐색 (PlayerActor의 위치를 직접 알 수 없으므로
-        // ZoneActor가 별도로 플레이어 위치 캐시를 유지하는 구조 사용)
-        if (!_playerPositions.Any()) return;
+        if (_playerPositions.Count == 0) return;
 
         var nearest = _playerPositions
             .Select(kv => (PlayerId: kv.Key, Pos: kv.Value, Dist: kv.Value.DistanceTo(req.Position)))
@@ -287,9 +300,41 @@ public sealed class ZoneActor : ReceiveActor
             .FirstOrDefault();
 
         if (nearest.PlayerId is not null)
-        {
             monsterActor.Tell(new MonsterActor.PlayerDetected(nearest.PlayerId, nearest.Pos));
-        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // 라우팅 헬퍼
+    // ─────────────────────────────────────────────────────────────────
+    private void ForwardToPlayer(string playerId, object msg)
+    {
+        if (_players.TryGetValue(playerId, out var actor))
+            actor.Tell(msg);
+    }
+
+    private void BroadcastToSessions(object msg)
+    {
+        foreach (var session in _sessions.Values)
+            session.Tell(msg);
+    }
+
+    private void BroadcastToSessionsExcept(object msg, string excludePlayerId)
+    {
+        foreach (var (playerId, session) in _sessions)
+            if (playerId != excludePlayerId)
+                session.Tell(msg);
+    }
+
+    private void SendToSession(string playerId, object msg)
+    {
+        if (_sessions.TryGetValue(playerId, out var session))
+            session.Tell(msg);
+    }
+
+    protected override void PostStop()
+    {
+        foreach (var timer in _respawnTimers)
+            timer.Cancel();
     }
 
     public sealed record RespawnMonster(string MonsterId);
