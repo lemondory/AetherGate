@@ -27,6 +27,7 @@ services:
       - JWT_AUDIENCE=${JWT_AUDIENCE:-AetherGateClient}
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/aethergate
       - REDIS_URL=redis://redis:6379
+      - BASE_URL=${BASE_URL:-http://localhost:8000}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID:-}
