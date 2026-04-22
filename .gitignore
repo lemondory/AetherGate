@@ -19,3 +19,9 @@ docs/private/
 .env
 appsettings.*.json
 !appsettings.json
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/

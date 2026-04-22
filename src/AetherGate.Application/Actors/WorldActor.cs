@@ -13,8 +13,11 @@ public sealed class WorldActor : ReceiveActor
 {
     private readonly ILoggingAdapter _log = Context.GetLogger();
 
-    private readonly Dictionary<string, IActorRef> _fieldZones       = new();
-    private readonly Dictionary<string, IActorRef> _dungeonInstances  = new();
+    private readonly Dictionary<string, IActorRef> _fieldZones      = new();
+    private readonly Dictionary<string, IActorRef> _dungeonInstances = new();
+
+    // 플레이어 → 현재 소속 ZoneActor 매핑 (Admin Kick에서 사용)
+    private readonly Dictionary<string, IActorRef> _playerZones = new();
 
     public WorldActor()
     {
@@ -23,6 +26,8 @@ public sealed class WorldActor : ReceiveActor
         Receive<EnterDungeonRequest>(HandleEnterDungeon);
         Receive<DungeonClearRequest>(HandleDungeonClear);
         Receive<DungeonFailRequest>(HandleDungeonFail);
+        Receive<KickPlayerRequest>(HandleKickPlayer);
+        Receive<AdminBroadcastRequest>(HandleAdminBroadcast);
         Receive<Terminated>(HandleZoneTerminated);
     }
 
@@ -34,7 +39,7 @@ public sealed class WorldActor : ReceiveActor
 
     private void CreateFieldZone(string zoneId, string mapId)
     {
-        var cfg = new ZoneConfig(zoneId, mapId, false);
+        var cfg  = new ZoneConfig(zoneId, mapId, false);
         var zone = Context.ActorOf(
             Props.Create(() => new ZoneActor(cfg)),
             $"zone-{zoneId}");
@@ -52,15 +57,15 @@ public sealed class WorldActor : ReceiveActor
             return;
         }
 
-        // EnterZoneRequest 전달 후 SessionActor를 ZoneActor에 등록
-        // (Domain 커맨드에는 IActorRef를 포함하지 않음 — Clean Architecture 유지)
         zone.Tell(req);
         zone.Tell(new SessionEnrollment(req.PlayerId, Sender));
+        _playerZones[req.PlayerId] = zone;
     }
 
     private void HandleLeaveZone(LeaveZoneRequest req)
     {
         FindZone(req.ZoneId)?.Tell(req);
+        _playerZones.Remove(req.PlayerId);
     }
 
     private void HandleEnterDungeon(EnterDungeonRequest req)
@@ -82,6 +87,7 @@ public sealed class WorldActor : ReceiveActor
         dungeon.Tell(new EnterZoneRequest(
             req.PlayerId, instanceId, new Domain.ValueObjects.Position(10, 10)));
         dungeon.Tell(new SessionEnrollment(req.PlayerId, sessionActor));
+        _playerZones[req.PlayerId] = dungeon;
     }
 
     private void HandleDungeonClear(DungeonClearRequest req)
@@ -102,16 +108,52 @@ public sealed class WorldActor : ReceiveActor
         }
     }
 
+    // ─── Admin 명령 처리 ──────────────────────────────────────────────
+
+    private void HandleKickPlayer(KickPlayerRequest req)
+    {
+        if (_playerZones.TryGetValue(req.PlayerId, out var zone))
+        {
+            // 플레이어가 속한 Zone에 LeaveZoneRequest 전송 → SessionActor 연결 해제
+            zone.Tell(new LeaveZoneRequest(req.PlayerId, ""));
+            _playerZones.Remove(req.PlayerId);
+            _log.Info("[World] Admin kicked player: {0}", req.PlayerId);
+        }
+        else
+        {
+            _log.Warning("[World] Kick failed — player not found: {0}", req.PlayerId);
+        }
+    }
+
+    private void HandleAdminBroadcast(AdminBroadcastRequest req)
+    {
+        foreach (var zone in _fieldZones.Values)
+            zone.Tell(req);
+        foreach (var dungeon in _dungeonInstances.Values)
+            dungeon.Tell(req);
+        _log.Info("[World] Admin broadcast sent to {0} zones",
+            _fieldZones.Count + _dungeonInstances.Count);
+    }
+
     private void HandleZoneTerminated(Terminated msg)
     {
-        var path = msg.ActorRef.Path.Name;
-        _log.Warning("[World] Zone actor terminated: {0}", path);
-        _dungeonInstances.Remove(path.StartsWith("zone-") ? path["zone-".Length..] : path);
+        var path   = msg.ActorRef.Path.Name;
+        var zoneId = path.StartsWith("zone-") ? path["zone-".Length..] : path;
+        _log.Warning("[World] Zone actor terminated: {0}", zoneId);
+        _dungeonInstances.Remove(zoneId);
+
+        // 해당 Zone 소속 플레이어 매핑 정리
+        var orphaned = _playerZones
+            .Where(kv => kv.Value.Equals(msg.ActorRef))
+            .Select(kv => kv.Key)
+            .ToList();
+        foreach (var pid in orphaned)
+            _playerZones.Remove(pid);
     }
 
     private IActorRef? FindZone(string zoneId)
     {
-        if (_fieldZones.TryGetValue(zoneId, out var zone))      return zone;
+        if (_fieldZones.TryGetValue(zoneId, out var zone))       return zone;
         if (_dungeonInstances.TryGetValue(zoneId, out var inst)) return inst;
         return null;
     }

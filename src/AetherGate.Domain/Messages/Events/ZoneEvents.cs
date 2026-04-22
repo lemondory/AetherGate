@@ -26,3 +26,6 @@ public sealed record ChatBroadcast(string SenderName, string Message, bool IsWhi
 public sealed record DungeonInstanceCreated(string ZoneInstanceId, string PlayerId);
 public sealed record DungeonCleared(string ZoneInstanceId);
 public sealed record DungeonFailed(string ZoneInstanceId);
+
+/// <summary>운영자 전체 공지 — SessionActor가 [SYSTEM] 채팅으로 클라이언트에 전달</summary>
+public sealed record AdminNotification(string Message);

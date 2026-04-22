@@ -98,6 +98,10 @@ public sealed class ZoneActor : ReceiveActor
             Context.Parent.Tell(req);
         });
 
+        // ─── 운영자 전체 공지 ─────────────────────────────────────────
+        Receive<AdminBroadcastRequest>(req =>
+            BroadcastToSessions(new AdminNotification(req.Message)));
+
         // ─── AoE 스킬 범위 피해 처리 ──────────────────────────────────
         // PlayerActor가 AreaAttack 시 ZoneActor에 위임 → 범위 내 몬스터에게 CombatDamage 전송
         Receive<PlayerActor.AreaSkillRequest>(HandleAreaSkill);

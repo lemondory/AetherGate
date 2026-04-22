@@ -5,27 +5,37 @@ using AetherGate.Domain.Messages.Commands;
 namespace AetherGate.Application.Actors;
 
 /// <summary>
-/// 최상위 Actor — WorldActor, GatewayActor, AuthActor를 자식으로 보유.
+/// 최상위 Actor — WorldActor, GatewayActor, AuthActor, AdminBridgeActor를 자식으로 보유.
 /// One-For-One 전략: 자식 하나가 죽어도 다른 자식은 무영향.
 /// </summary>
 public sealed class GameServerActor : ReceiveActor
 {
     private readonly ILoggingAdapter _log = Context.GetLogger();
-    private IActorRef _worldActor = ActorRefs.Nobody;
-    private IActorRef _gatewayActor = ActorRefs.Nobody;
-    private IActorRef _authActor = ActorRefs.Nobody;
 
-    public GameServerActor()
+    private readonly ITokenService _tokenService;
+    private readonly string _redisConnection;
+
+    private IActorRef _worldActor   = ActorRefs.Nobody;
+    private IActorRef _gatewayActor = ActorRefs.Nobody;
+    private IActorRef _authActor    = ActorRefs.Nobody;
+    private IActorRef _adminBridge  = ActorRefs.Nobody;
+
+    public GameServerActor(ITokenService tokenService, string redisConnection)
     {
+        _tokenService    = tokenService;
+        _redisConnection = redisConnection;
+
         Receive<StartServer>(_ => HandleStart());
         Receive<StopServer>(_ => HandleStop());
+
+        // AdminBridgeActor가 파싱한 운영 명령 수신
+        Receive<AdminCommand>(HandleAdminCommand);
     }
 
     protected override void PreStart()
     {
         _log.Info("[GameServer] Starting up...");
 
-        // Supervision: 자식 Actor 장애 시 재시작, 최대 10회/1분
         var strategy = new OneForOneStrategy(
             maxNrOfRetries: 10,
             withinTimeRange: TimeSpan.FromMinutes(1),
@@ -36,7 +46,7 @@ public sealed class GameServerActor : ReceiveActor
             });
 
         _authActor = Context.ActorOf(
-            Props.Create(() => new AuthActor()).WithSupervisorStrategy(strategy),
+            Props.Create(() => new AuthActor(_tokenService)).WithSupervisorStrategy(strategy),
             "auth");
 
         _worldActor = Context.ActorOf(
@@ -46,6 +56,10 @@ public sealed class GameServerActor : ReceiveActor
         _gatewayActor = Context.ActorOf(
             Props.Create(() => new GatewayActor(_authActor, _worldActor)).WithSupervisorStrategy(strategy),
             "gateway");
+
+        _adminBridge = Context.ActorOf(
+            Props.Create(() => new AdminBridgeActor(_redisConnection, Self)).WithSupervisorStrategy(strategy),
+            "admin-bridge");
 
         _log.Info("[GameServer] All child actors started.");
     }
@@ -60,6 +74,26 @@ public sealed class GameServerActor : ReceiveActor
     {
         _log.Info("[GameServer] Shutting down...");
         Context.Stop(Self);
+    }
+
+    private void HandleAdminCommand(AdminCommand cmd)
+    {
+        switch (cmd.Type)
+        {
+            case AdminCommandType.Kick when cmd.PlayerId is not null:
+                _worldActor.Tell(new KickPlayerRequest(cmd.PlayerId));
+                _log.Info("[GameServer] Admin kick: {0}", cmd.PlayerId);
+                break;
+
+            case AdminCommandType.Broadcast when cmd.Message is not null:
+                _worldActor.Tell(new AdminBroadcastRequest(cmd.Message));
+                _log.Info("[GameServer] Admin broadcast: {0}", cmd.Message);
+                break;
+
+            default:
+                _log.Warning("[GameServer] Unknown admin command: {0}", cmd.Type);
+                break;
+        }
     }
 
     // ─── 내부 전용 메시지 ──────────────────────────────────────────────

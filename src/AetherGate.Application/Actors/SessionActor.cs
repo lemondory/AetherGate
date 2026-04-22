@@ -253,6 +253,15 @@ public sealed class SessionActor : ReceiveActor
             Receive<DungeonFailed>(evt => SendPacket(PacketId.DungeonResult,
                 new DungeonResultPacket { ZoneInstanceId = evt.ZoneInstanceId, IsCleared = false }));
 
+            // 운영자 전체 공지 → [SYSTEM] 채팅으로 클라이언트에 전달
+            Receive<AdminNotification>(evt => SendPacket(PacketId.ChatMessage,
+                new ChatMessagePacket
+                {
+                    SenderName = "[SYSTEM]",
+                    Message    = evt.Message,
+                    IsWhisper  = false,
+                }));
+
             Receive<ConnectionClosed>(_ => HandleDisconnect());
             Receive<ConnectionError>(msg =>
             {
