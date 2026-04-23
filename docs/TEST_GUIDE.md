@@ -25,7 +25,7 @@ cd AetherGate
 docker compose up postgres redis -d
 
 # 웹 서버 실행
-cd ../aethergate-web
+cd web
 source .venv/bin/activate
 uvicorn app.main:app --reload --port 8000
 ```
@@ -93,7 +93,7 @@ docker compose up --build
 # 또는 로컬에서 게임 서버만 실행
 export JWT_SECRET=<.env와 동일한 값>
 export REDIS_URL=localhost:6379
-dotnet run --project src/AetherGate.Server
+dotnet run --project server/AetherGate.Server
 ```
 
 ### 서버 기동 확인

@@ -1,0 +1,51 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AetherGate.Domain", "AetherGate.Domain\AetherGate.Domain.csproj", "{A22B7D30-F64F-4E94-AEC0-2EC4018A41E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AetherGate.Application", "AetherGate.Application\AetherGate.Application.csproj", "{76E72A29-F180-4E21-B9CF-55CB70C224BF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AetherGate.Infrastructure", "AetherGate.Infrastructure\AetherGate.Infrastructure.csproj", "{AC246229-9813-4FCE-819B-AC493A432C94}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AetherGate.Server", "AetherGate.Server\AetherGate.Server.csproj", "{8294AD22-34A4-42CC-8B80-B4A17D418B21}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{064E8EE2-3C74-431D-B211-6A38D8722C01}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AetherGate.Tests", "tests\AetherGate.Tests\AetherGate.Tests.csproj", "{209289B0-B1BA-46F7-A38A-155B4CBA41F9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A22B7D30-F64F-4E94-AEC0-2EC4018A41E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A22B7D30-F64F-4E94-AEC0-2EC4018A41E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A22B7D30-F64F-4E94-AEC0-2EC4018A41E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A22B7D30-F64F-4E94-AEC0-2EC4018A41E8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{76E72A29-F180-4E21-B9CF-55CB70C224BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{76E72A29-F180-4E21-B9CF-55CB70C224BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{76E72A29-F180-4E21-B9CF-55CB70C224BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{76E72A29-F180-4E21-B9CF-55CB70C224BF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AC246229-9813-4FCE-819B-AC493A432C94}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC246229-9813-4FCE-819B-AC493A432C94}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC246229-9813-4FCE-819B-AC493A432C94}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC246229-9813-4FCE-819B-AC493A432C94}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8294AD22-34A4-42CC-8B80-B4A17D418B21}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8294AD22-34A4-42CC-8B80-B4A17D418B21}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8294AD22-34A4-42CC-8B80-B4A17D418B21}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8294AD22-34A4-42CC-8B80-B4A17D418B21}.Release|Any CPU.Build.0 = Release|Any CPU
+		{209289B0-B1BA-46F7-A38A-155B4CBA41F9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{209289B0-B1BA-46F7-A38A-155B4CBA41F9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{209289B0-B1BA-46F7-A38A-155B4CBA41F9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{209289B0-B1BA-46F7-A38A-155B4CBA41F9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{209289B0-B1BA-46F7-A38A-155B4CBA41F9} = {064E8EE2-3C74-431D-B211-6A38D8722C01}
+	EndGlobalSection
+EndGlobal

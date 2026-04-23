@@ -1,0 +1,169 @@
+{% extends "admin/base.html" %}
+
+{% block title %}AetherGate Admin — 대시보드{% endblock %}
+
+{% block body %}
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    AetherGate
+    <span>Admin Dashboard</span>
+  </div>
+  <a href="/admin/dashboard" class="active">대시보드</a>
+  <a href="/admin/dashboard#kick">플레이어 관리</a>
+  <a href="/admin/dashboard#broadcast">공지 발송</a>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <h1>대시보드</h1>
+    <span class="badge" id="badge-role">admin</span>
+  </div>
+
+  <div class="content">
+
+    <!-- 통계 -->
+    <div class="stat-grid">
+      <div class="stat">
+        <div class="label">서버 상태</div>
+        <div class="value green" id="stat-status">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">접속자 수</div>
+        <div class="value blue" id="stat-online">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">총 회원 수</div>
+        <div class="value" id="stat-users">—</div>
+      </div>
+    </div>
+
+    <!-- 접속 중인 플레이어 -->
+    <div class="card" id="kick">
+      <h2>접속 중인 플레이어</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Player ID</th>
+            <th>닉네임</th>
+            <th>Provider</th>
+            <th>접속 시간</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="player-list">
+          <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">불러오는 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 강제 킥 -->
+    <div class="card">
+      <h2>플레이어 강제 퇴장</h2>
+      <div class="form-row">
+        <input type="text" id="kick-id" placeholder="Player ID 입력" />
+        <button class="btn-danger" onclick="doKick()">강제 퇴장</button>
+      </div>
+    </div>
+
+    <!-- 공지 발송 -->
+    <div class="card" id="broadcast">
+      <h2>전체 공지 발송</h2>
+      <textarea id="broadcast-msg" placeholder="공지 내용을 입력하세요"></textarea>
+      <div style="margin-top:10px">
+        <button class="btn-primary" onclick="doBroadcast()">발송</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = localStorage.getItem('ag_token');
+if (!token) location.href = '/admin/login';
+
+const headers = {
+  'Content-Type': 'application/json',
+  'Authorization': 'Bearer ' + token,
+};
+
+// ── 통계 로드 ──────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const res = await fetch('/admin/stats', { headers });
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('ag_token');
+      location.href = '/admin/login';
+      return;
+    }
+    const d = await res.json();
+    document.getElementById('stat-status').textContent = d.server_online ? 'Online' : 'Offline';
+    document.getElementById('stat-online').textContent  = d.online_players;
+    document.getElementById('stat-users').textContent   = d.total_users;
+    document.getElementById('badge-role').textContent   = d.my_role ?? 'admin';
+    renderPlayers(d.players ?? []);
+  } catch {
+    document.getElementById('stat-status').textContent = 'Error';
+  }
+}
+
+function renderPlayers(players) {
+  const tbody = document.getElementById('player-list');
+  if (!players.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">접속 중인 플레이어 없음</td></tr>';
+    return;
+  }
+  tbody.innerHTML = players.map(p => `
+    <tr>
+      <td style="font-family:monospace;font-size:12px">${p.id}</td>
+      <td>${p.username ?? '<span style="color:var(--muted)">—</span>'}</td>
+      <td><span class="tag ${p.provider}">${p.provider}</span></td>
+      <td style="color:var(--muted);font-size:12px">${p.connected_at ?? '—'}</td>
+      <td><button class="btn-danger" style="padding:4px 12px;font-size:12px" onclick="doKickId('${p.id}')">퇴장</button></td>
+    </tr>
+  `).join('');
+}
+
+// ── 강제 킥 ───────────────────────────────────────────────
+async function doKick() {
+  const id = document.getElementById('kick-id').value.trim();
+  if (!id) { showToast('Player ID를 입력하세요', 'err'); return; }
+  await kickPlayer(id);
+  document.getElementById('kick-id').value = '';
+}
+
+async function doKickId(id) {
+  await kickPlayer(id);
+}
+
+async function kickPlayer(id) {
+  const res = await fetch(`/admin/kick/${encodeURIComponent(id)}`, { method: 'POST', headers });
+  if (res.ok || res.status === 204) {
+    showToast(`${id} 퇴장 명령 전송 완료`);
+    loadStats();
+  } else {
+    showToast('요청 실패: ' + res.status, 'err');
+  }
+}
+
+// ── 공지 발송 ─────────────────────────────────────────────
+async function doBroadcast() {
+  const msg = document.getElementById('broadcast-msg').value.trim();
+  if (!msg) { showToast('공지 내용을 입력하세요', 'err'); return; }
+
+  const url = '/admin/broadcast?' + new URLSearchParams({ message: msg });
+  const res = await fetch(url, { method: 'POST', headers });
+  if (res.ok || res.status === 204) {
+    showToast('공지 발송 완료');
+    document.getElementById('broadcast-msg').value = '';
+  } else {
+    showToast('요청 실패: ' + res.status, 'err');
+  }
+}
+
+// ── 초기화 ────────────────────────────────────────────────
+loadStats();
+setInterval(loadStats, 10000);  // 10초마다 갱신
+</script>
+{% endblock %}

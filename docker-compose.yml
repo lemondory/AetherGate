@@ -2,8 +2,8 @@ services:
 
   aethergate-server:
     build:
-      context: .
-      dockerfile: src/AetherGate.Server/Dockerfile
+      context: ./server
+      dockerfile: AetherGate.Server/Dockerfile
     ports:
       - "9000:9000"   # 클라이언트 TCP
       - "8090:8090"   # Akka.Remote (내부)
@@ -18,7 +18,7 @@ services:
 
   aethergate-web:
     build:
-      context: ../aethergate-web
+      context: ./web
     ports:
       - "8000:8000"
     environment:

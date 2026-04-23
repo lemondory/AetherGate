@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}AetherGate Admin{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0f1117;
+      --surface: #1a1d27;
+      --border:  #2a2d3a;
+      --accent:  #5b7cf6;
+      --danger:  #e05c5c;
+      --success: #4caf7d;
+      --text:    #d4d8f0;
+      --muted:   #6b7099;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── 사이드바 ── */
+    .sidebar {
+      width: 220px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .sidebar-logo span { color: var(--text); font-weight: 400; font-size: 12px; display: block; margin-top: 2px; }
+
+    .sidebar a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      border-left: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .sidebar a:hover,
+    .sidebar a.active {
+      color: var(--text);
+      border-left-color: var(--accent);
+      background: rgba(91,124,246,0.08);
+    }
+
+    /* ── 메인 ── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .topbar h1 { font-size: 16px; font-weight: 600; }
+
+    .topbar .badge {
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(91,124,246,0.15);
+      color: var(--accent);
+    }
+
+    .content { padding: 28px; overflow-y: auto; flex: 1; }
+
+    /* ── 카드 ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+
+    .card h2 { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
+
+    /* ── 통계 그리드 ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 20px; }
+
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+    }
+
+    .stat .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .stat .value { font-size: 28px; font-weight: 700; }
+    .stat .value.green { color: var(--success); }
+    .stat .value.blue  { color: var(--accent); }
+
+    /* ── 폼 ── */
+    .form-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+
+    input[type="text"], textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+    input[type="text"] { width: 280px; }
+    textarea { width: 100%; resize: vertical; min-height: 72px; }
+
+    button {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-danger  { background: var(--danger);  color: #fff; }
+
+    /* ── 토스트 ── */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+      z-index: 999;
+    }
+
+    #toast.show { opacity: 1; pointer-events: auto; }
+    #toast.ok  { background: var(--success); color: #fff; }
+    #toast.err { background: var(--danger);  color: #fff; }
+
+    /* ── 테이블 ── */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 8px 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .tag.online  { background: rgba(76,175,125,0.15); color: var(--success); }
+    .tag.guest   { background: rgba(107,112,153,0.15); color: var(--muted); }
+    .tag.google  { background: rgba(219,68,55,0.15);  color: #db4437; }
+    .tag.kakao   { background: rgba(254,229,0,0.15);  color: #d4b800; }
+    .tag.admin   { background: rgba(91,124,246,0.15); color: var(--accent); }
+
+    /* ── 로그인 화면 ── */
+    .login-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      width: 100%;
+    }
+
+    .login-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px;
+      width: 360px;
+    }
+
+    .login-box h1 { font-size: 22px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .login-box p  { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+    .login-box label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--muted); }
+    .login-box input { width: 100%; margin-bottom: 14px; }
+    .login-box button { width: 100%; padding: 10px; }
+    .login-err { font-size: 13px; color: var(--danger); margin-top: 10px; display: none; }
+  </style>
+</head>
+<body>
+{% block body %}{% endblock %}
+
+<div id="toast"></div>
+
+<script>
+function showToast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.className = ''; }, 3000);
+}
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

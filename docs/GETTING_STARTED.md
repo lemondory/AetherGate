@@ -14,9 +14,6 @@
 git clone <this-repo>
 cd AetherGate
 
-# aethergate-web 저장소를 같은 부모 디렉토리에 클론
-git clone <aethergate-web-repo> ../aethergate-web
-
 # 2. 환경변수 설정
 cp .env.example .env
 # .env 파일 열어 JWT_SECRET 등 입력
@@ -61,13 +58,13 @@ docker compose up postgres redis -d
 export JWT_SECRET=dev-secret
 export REDIS_URL=localhost:6379
 
-dotnet run --project src/AetherGate.Server
+dotnet run --project server/AetherGate.Server
 ```
 
 ### FastAPI 웹 서버
 
 ```bash
-cd ../aethergate-web
+cd web
 
 python3 -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate

@@ -1,0 +1,49 @@
+{% extends "admin/base.html" %}
+
+{% block title %}AetherGate Admin — 로그인{% endblock %}
+
+{% block body %}
+<div class="login-wrap">
+  <div class="login-box">
+    <h1>AetherGate</h1>
+    <p>Admin Dashboard</p>
+
+    <label for="key">Guest Key</label>
+    <input type="text" id="key" placeholder="guest_key를 입력하세요" />
+
+    <button class="btn-primary" onclick="doLogin()">로그인</button>
+    <div class="login-err" id="err"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function doLogin() {
+  const key = document.getElementById('key').value.trim();
+  if (!key) return;
+
+  const res = await fetch('/auth/guest/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ guest_key: key }),
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    localStorage.setItem('ag_token', data.access_token);
+    location.href = '/admin/dashboard';
+  } else {
+    const err = document.getElementById('err');
+    err.style.display = 'block';
+    err.textContent = res.status === 404
+      ? '존재하지 않는 계정입니다.'
+      : '로그인에 실패했습니다. (' + res.status + ')';
+  }
+}
+
+document.getElementById('key').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+</script>
+{% endblock %}
