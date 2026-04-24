@@ -4,6 +4,7 @@ services:
     build:
       context: ./server
       dockerfile: AetherGate.Server/Dockerfile
+    platform: linux/amd64
     ports:
       - "9000:9000"   # 클라이언트 TCP
       - "8090:8090"   # Akka.Remote (내부)
