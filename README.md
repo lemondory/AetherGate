@@ -90,3 +90,4 @@ docker compose up --build
 - [아키텍처](docs/ARCHITECTURE.md) — Actor 계층, 패킷 프로토콜, 전체 흐름
 - [실행 방법](docs/GETTING_STARTED.md) — 로컬 개발 환경 설정
 - [테스트](docs/TEST_GUIDE.md) — 서버 구동 순서 및 테스트 방법
+- [배포](docs/DEPLOYMENT.md) — AWS ECS 배포 아키텍처 및 CI/CD 구성
