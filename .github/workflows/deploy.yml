@@ -1,0 +1,111 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION:       ap-northeast-2
+  ECR_SERVER_REPO:  aethergate-server
+  ECR_WEB_REPO:     aethergate-web
+  ECS_CLUSTER:      aethergate
+  ECS_SERVER_SVC:   aethergate-server
+  ECS_WEB_SVC:      aethergate-web
+
+jobs:
+  # ── Job 1: 테스트 ─────────────────────────────────────────────────────────
+  test:
+    name: .NET 테스트
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: .NET 9 SDK 설치
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: 패키지 복원
+        run: dotnet restore server/AetherGate.sln
+
+      - name: 빌드
+        run: dotnet build server/AetherGate.sln --no-restore -c Release
+
+      - name: 테스트 실행 (80개)
+        run: dotnet test server/AetherGate.sln --no-build -c Release --logger "console;verbosity=normal"
+
+  # ── Job 2: 배포 (main 브랜치 push + 테스트 통과 시에만) ──────────────────
+  deploy:
+    name: ECR 푸시 & ECS 배포
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: AWS 자격증명 설정
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: ECR 로그인
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── 게임 서버 이미지 ─────────────────────────────────────────────────
+      - name: 게임 서버 이미지 빌드 & 푸시
+        env:
+          IMAGE: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_SERVER_REPO }}:${{ github.sha }}
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            -f server/AetherGate.Server/Dockerfile \
+            -t $IMAGE \
+            ./server
+          docker push $IMAGE
+          # latest 태그도 함께 업데이트
+          docker tag $IMAGE ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_SERVER_REPO }}:latest
+          docker push ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_SERVER_REPO }}:latest
+
+      # ── 웹 서버 이미지 ───────────────────────────────────────────────────
+      - name: 웹 서버 이미지 빌드 & 푸시
+        env:
+          IMAGE: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_WEB_REPO }}:${{ github.sha }}
+        run: |
+          docker build \
+            --platform linux/arm64 \
+            -f web/Dockerfile \
+            -t $IMAGE \
+            ./web
+          docker push $IMAGE
+          docker tag $IMAGE ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_WEB_REPO }}:latest
+          docker push ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_WEB_REPO }}:latest
+
+      # ── ECS 롤링 배포 ────────────────────────────────────────────────────
+      - name: 게임 서버 ECS 배포
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVER_SVC }} \
+            --force-new-deployment
+
+      - name: 웹 서버 ECS 배포
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_WEB_SVC }} \
+            --force-new-deployment
+
+      - name: 배포 완료 대기 (웹 서버)
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_WEB_SVC }}
