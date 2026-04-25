@@ -1,5 +1,7 @@
 # AetherGate
 
+![CI](https://github.com/lemondory/AetherGate/actions/workflows/deploy.yml/badge.svg)
+
 Akka.NET 기반 MMO 게임 서버 포트폴리오 프로젝트.
 
 Actor 모델의 핵심 개념(Supervision, FSM, PipeTo 패턴)을 실제 게임 서버에 적용하고,
