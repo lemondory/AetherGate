@@ -1,6 +1,6 @@
 # AetherGate
 
-![CI](https://github.com/lemondory/AetherGate/actions/workflows/deploy.yml/badge.svg)
+![CI](https://github.com/lemondory/AetherGate/actions/workflows/ci.yml/badge.svg)
 
 Akka.NET 기반 MMO 게임 서버 포트폴리오 프로젝트.
 

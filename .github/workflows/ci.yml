@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: .NET 테스트
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: .NET 9 SDK 설치
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: 패키지 복원
+        run: dotnet restore server/AetherGate.sln
+
+      - name: 빌드
+        run: dotnet build server/AetherGate.sln --no-restore -c Release
+
+      - name: 테스트 실행 (80개)
+        run: dotnet test server/AetherGate.sln --no-build -c Release --logger "console;verbosity=normal"

@@ -1,9 +1,7 @@
-name: CI / CD
+name: CD
 
 on:
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
 
 env:
@@ -15,41 +13,26 @@ env:
   ECS_WEB_SVC:      aethergate-web
 
 jobs:
-  # ── Job 1: 테스트 ─────────────────────────────────────────────────────────
-  test:
-    name: .NET 테스트
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 코드 체크아웃
-        uses: actions/checkout@v4
-
-      - name: .NET 9 SDK 설치
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: 패키지 복원
-        run: dotnet restore server/AetherGate.sln
-
-      - name: 빌드
-        run: dotnet build server/AetherGate.sln --no-restore -c Release
-
-      - name: 테스트 실행 (80개)
-        run: dotnet test server/AetherGate.sln --no-build -c Release --logger "console;verbosity=normal"
-
-  # ── Job 2: 배포 (main 브랜치 push + 테스트 통과 시에만) ──────────────────
   deploy:
     name: ECR 푸시 & ECS 배포
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
 
+      - name: AWS 자격증명 확인
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "AWS_ACCESS_KEY_ID가 설정되지 않아 배포를 건너뜁니다."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: AWS 자격증명 설정
+        if: steps.check-secrets.outputs.skip == 'false'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -57,11 +40,13 @@ jobs:
           aws-region:            ${{ env.AWS_REGION }}
 
       - name: ECR 로그인
+        if: steps.check-secrets.outputs.skip == 'false'
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       # ── 게임 서버 이미지 ─────────────────────────────────────────────────
       - name: 게임 서버 이미지 빌드 & 푸시
+        if: steps.check-secrets.outputs.skip == 'false'
         env:
           IMAGE: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_SERVER_REPO }}:${{ github.sha }}
         run: |
@@ -71,12 +56,12 @@ jobs:
             -t $IMAGE \
             ./server
           docker push $IMAGE
-          # latest 태그도 함께 업데이트
           docker tag $IMAGE ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_SERVER_REPO }}:latest
           docker push ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_SERVER_REPO }}:latest
 
       # ── 웹 서버 이미지 ───────────────────────────────────────────────────
       - name: 웹 서버 이미지 빌드 & 푸시
+        if: steps.check-secrets.outputs.skip == 'false'
         env:
           IMAGE: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_WEB_REPO }}:${{ github.sha }}
         run: |
@@ -91,6 +76,7 @@ jobs:
 
       # ── ECS 롤링 배포 ────────────────────────────────────────────────────
       - name: 게임 서버 ECS 배포
+        if: steps.check-secrets.outputs.skip == 'false'
         run: |
           aws ecs update-service \
             --cluster ${{ env.ECS_CLUSTER }} \
@@ -98,6 +84,7 @@ jobs:
             --force-new-deployment
 
       - name: 웹 서버 ECS 배포
+        if: steps.check-secrets.outputs.skip == 'false'
         run: |
           aws ecs update-service \
             --cluster ${{ env.ECS_CLUSTER }} \
@@ -105,6 +92,7 @@ jobs:
             --force-new-deployment
 
       - name: 배포 완료 대기 (웹 서버)
+        if: steps.check-secrets.outputs.skip == 'false'
         run: |
           aws ecs wait services-stable \
             --cluster ${{ env.ECS_CLUSTER }} \
